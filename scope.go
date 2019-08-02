@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -354,6 +355,19 @@ func (scope *Scope) QuotedTableName() (name string) {
 	}
 
 	return scope.Quote(scope.TableName())
+}
+
+// MigrationTableName appends _migrate to the table name
+// in order to create the migration table where we shall be storing
+// the migration related data for the auto migrate
+func (scope *Scope) MigrationTableName() string {
+	return scope.TableName() + "_migrate"
+}
+
+// QuotedMigrationTableName gets the table name and then appends `_migrate` to it
+// while quoting the entire string
+func (scope *Scope) QuotedMigrationTableName() string {
+	return scope.Quote(scope.MigrationTableName())
 }
 
 // CombinedConditionSql return combined condition sql
@@ -1219,6 +1233,11 @@ func (scope *Scope) dropTable() *Scope {
 	return scope
 }
 
+func (scope *Scope) dropMigrationTable() *Scope {
+	scope.Raw(fmt.Sprintf("DROP TABLE %v", scope.MigrationTableName())).Exec()
+	return scope
+}
+
 func (scope *Scope) modifyColumn(column string, typ string) {
 	scope.db.AddError(scope.Dialect().ModifyColumn(scope.QuotedTableName(), scope.Quote(column), typ))
 }
@@ -1279,6 +1298,8 @@ func (scope *Scope) removeIndex(indexName string) {
 func (scope *Scope) autoMigrate() *Scope {
 	tableName := scope.TableName()
 	quotedTableName := scope.QuotedTableName()
+	migrationTableName := scope.MigrationTableName()
+	quotedMigrationTableName := scope.QuotedMigrationTableName()
 
 	if !scope.Dialect().HasTable(tableName) {
 		scope.createTable()
@@ -1290,6 +1311,20 @@ func (scope *Scope) autoMigrate() *Scope {
 					scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD %v %v;", quotedTableName, scope.Quote(field.DBName), sqlTag)).Exec()
 				}
 			}
+			if source, ok := field.TagSettingsGet("SOURCE"); ok {
+				if !scope.Dialect().HasTable(migrationTableName) {
+					// NOTE temporarily hard coding values, need to define struct for the same
+					scope.Log(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v (%v %v,%v %v,%v %v,%v %v);", quotedMigrationTableName, "id", "INT", "field", "VARCHAR(150)", "action", "VARCHAR(10)", "status", "VARCHAR(10)"))
+					// errFound := scope.Raw(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v (%v %v,%v %v,%v %v,%v %v);", quotedMigrationTableName, "id", "INT", "field", "VARCHAR(150)", "action", "VARCHAR(10)", "status", "VARCHAR(10)")).Exec().HasError()
+					errFound := scope.Raw(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v;", quotedMigrationTableName)).Exec().HasError()
+					log.Println("found error in creating migration table", errFound)
+				}
+				fmt.Println(source)
+				// check if field has flag source
+				// check if migration for field has been initiated
+				// if not then notify and start migration
+			}
+
 			scope.createJoinTable(field)
 		}
 		scope.autoIndex()

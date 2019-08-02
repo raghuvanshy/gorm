@@ -2,6 +2,7 @@ package gorm_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -87,6 +88,35 @@ func TestDropTableWithTableOptions(t *testing.T) {
 
 	DB = DB.Set("gorm:table_options", "CHARSET=utf8")
 	err := DB.DropTable(&UserWithOptions{}).Error
+	if err != nil {
+		t.Errorf("Table must be dropped, got error %s", err)
+	}
+}
+
+func TestQuotedMigrationTableName(t *testing.T) {
+	type UserWithOptions struct {
+		gorm.Model
+	}
+	scope := DB.NewScope(&UserWithOptions{})
+	tableName := scope.QuotedMigrationTableName()
+	expTableName := fmt.Sprintf("\"%v_migrate\"", scope.TableName())
+	if tableName != expTableName {
+		t.Errorf("incorrect migration table name exp: %v, got: %v", expTableName, tableName)
+	}
+}
+
+func TestDropMigrationTable(t *testing.T) {
+	type testTable struct {
+		Name   string `gorm:"name"`
+		Source string `gorm:"SOURCE:testSource"`
+		gorm.Model
+	}
+	err := DB.AutoMigrate(&testTable{Name: "testName"}).Error
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = DB.DropMigrationTable(&testTable{}).Error
 	if err != nil {
 		t.Errorf("Table must be dropped, got error %s", err)
 	}
