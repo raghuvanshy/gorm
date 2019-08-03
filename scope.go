@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"github.com/jinzhu/gorm"
 	"reflect"
 	"regexp"
 	"strings"
@@ -32,7 +31,7 @@ type Migration struct {
 	TableName       string
 	FieldName       string
 	SourceFieldName string
-	Status			string
+	Status          string
 }
 
 // IndirectValue return scope's reflect value's indirect value
@@ -565,6 +564,7 @@ func (scope *Scope) primaryCondition(value interface{}) string {
 }
 
 func (scope *Scope) buildCondition(clause map[string]interface{}, include bool) (str string) {
+	fmt.Printf("%+v", clause)
 	var (
 		quotedTableName  = scope.QuotedTableName()
 		quotedPrimaryKey = scope.Quote(scope.PrimaryKey())
@@ -1304,13 +1304,13 @@ func (scope *Scope) removeIndex(indexName string) {
 	scope.Dialect().RemoveIndex(scope.TableName(), indexName)
 }
 
-func (scope *Scope) migrationStatus(tableName string, fieldName string, sourceFieldName string,) (string, error) {
+func (scope *Scope) migrationStatus(tableName string, fieldName string, sourceFieldName string) (string, error) {
 	var migrationStatus Migration
-	migrationError := scope.db.Model(Migration{}).Where(Migration{TableName:tableName, FieldName:fieldName, SourceFieldName:sourceFieldName}).First(&migrationStatus).Error
+	migrationError := scope.db.Model(Migration{}).Where(Migration{TableName: tableName, FieldName: fieldName, SourceFieldName: sourceFieldName}).First(&migrationStatus).Error
 	if migrationError == nil {
 		return migrationStatus.Status, nil
 	}
-	if migrationError.Error() == gorm.ErrRecordNotFound.Error() {
+	if migrationError.Error() == ErrRecordNotFound.Error() {
 		return "NOT_STARTED", nil
 	}
 	return "", migrationError
@@ -1340,7 +1340,7 @@ func (scope *Scope) autoMigrate() *Scope {
 
 				migrationStatus, migrationError := scope.migrationStatus(tableName, field.Name, field.MigrationSource)
 				if migrationError == nil {
-					switch migrationStatus{
+					switch migrationStatus {
 					case "COMPLETE":
 						// IGNORE SINCE MIGRATION IS COMPLETE
 					case "IN PROGRESS":
@@ -1348,10 +1348,10 @@ func (scope *Scope) autoMigrate() *Scope {
 					default:
 						fmt.Println("NO RECORD FOUND. INITIATE MIGRATION")
 						newMigration := Migration{
-							TableName:tableName,
-							FieldName:field.Name,
-							SourceFieldName:field.MigrationSource,
-							Status: "NOT_STARTED",
+							TableName:       tableName,
+							FieldName:       field.Name,
+							SourceFieldName: field.MigrationSource,
+							Status:          "NOT_STARTED",
 						}
 						creationError := scope.db.Create(&newMigration).Error
 						if creationError != nil {
