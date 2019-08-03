@@ -18,9 +18,6 @@ func main() {
 		fmt.Println(err.Error())
 	}
 	db.AutoMigrate(Models.Customer{})
-	/*db.Create(&Models.Customer{Ph:998877})
-	db.Create(&Models.Customer{Ph:887766})
-	db.Create(&Models.Customer{Ph:776655})
 	db.Create(&Models.Customer{Ph:998877})
 	db.Create(&Models.Customer{Ph:887766})
 	db.Create(&Models.Customer{Ph:776655})
@@ -47,5 +44,8 @@ func main() {
 	db.Create(&Models.Customer{Ph:776655})
 	db.Create(&Models.Customer{Ph:998877})
 	db.Create(&Models.Customer{Ph:887766})
-	db.Create(&Models.Customer{Ph:776655})*/
+	db.Create(&Models.Customer{Ph:776655})
+	db.Create(&Models.Customer{Ph:998877})
+	db.Create(&Models.Customer{Ph:887766})
+	db.Create(&Models.Customer{Ph:776655})
 }
