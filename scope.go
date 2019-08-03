@@ -1382,11 +1382,24 @@ func (scope *Scope) autoMigrate() *Scope {
 							fieldToUpdate := reflect.ValueOf(&val).Elem().FieldByName(field.Name)
 							if newValue[0].Kind() == reflect.String {
 								fieldToUpdate.SetString(newValue[0].String())
-							} else if newValue[1].Kind() == reflect.Int {
+							} else if newValue[0].Kind() == reflect.Int {
 								fieldToUpdate.SetInt(newValue[0].Int())
 							}
 							scope.db.Table(tableName).Save(val)
 						}
+						var currentMigration Migration
+						currentMigrationError := scope.db.Model(Migration{}).Where(Migration{
+							TableName:tableName,
+							FieldName:field.Name,
+							SourceFieldName:field.MigrationSource,
+							Status: "IN PROGRESS",
+						}).First(&currentMigration).Error
+						currentMigration.Status = "COMPLETED"
+						if currentMigrationError != nil {
+							fmt.Println("ERROR WHILE RETRIEVING EXISTING MIGRATION")
+							panic(currentMigrationError)
+						}
+						scope.db.Model(Migration{}).Save(currentMigration)
 					}
 				} else {
 					fmt.Println(migrationError.Error())
