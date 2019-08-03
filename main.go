@@ -34,6 +34,9 @@ type DB struct {
 
 	// function to be used to override the creating of a new timestamp
 	nowFuncOverride func() time.Time
+
+	// Migrating helps notify whether a db migration is taking place
+	Migrating bool
 }
 
 type logModeValue int

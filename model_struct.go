@@ -137,6 +137,7 @@ type Relationship struct {
 	JoinTableHandler             JoinTableHandlerInterface
 }
 
+// TODO reuse this function to overwrite the values found for a specific field
 func getForeignField(column string, fields []*StructField) *StructField {
 	for _, field := range fields {
 		if field.Name == column || field.DBName == column || field.DBName == ToColumnName(column) {
