@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -25,6 +24,7 @@ type Scope struct {
 	skipLeft        bool
 	fields          *[]*Field
 	selectAttrs     *[]string
+	Migrating       bool
 }
 
 // IndirectValue return scope's reflect value's indirect value
@@ -1234,7 +1234,8 @@ func (scope *Scope) dropTable() *Scope {
 }
 
 func (scope *Scope) dropMigrationTable() *Scope {
-	scope.Raw(fmt.Sprintf("DROP TABLE %v", scope.MigrationTableName())).Exec()
+
+	scope.Raw(fmt.Sprintf("DROP TABLE %v;", scope.QuotedMigrationTableName())).Exec()
 	return scope
 }
 
@@ -1311,16 +1312,15 @@ func (scope *Scope) autoMigrate() *Scope {
 					scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD %v %v;", quotedTableName, scope.Quote(field.DBName), sqlTag)).Exec()
 				}
 			}
-			if source, ok := field.TagSettingsGet("SOURCE"); ok {
+			// check if field has flag source
+			// if source, ok := field.TagSettingsGet("SOURCE"); ok {
+			if _, ok := field.TagSettingsGet("SOURCE"); ok {
+				// check if migration table has been created
+				scope.Migrating = true
 				if !scope.Dialect().HasTable(migrationTableName) {
-					// NOTE temporarily hard coding values, need to define struct for the same
-					scope.Log(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v (%v %v,%v %v,%v %v,%v %v);", quotedMigrationTableName, "id", "INT", "field", "VARCHAR(150)", "action", "VARCHAR(10)", "status", "VARCHAR(10)"))
-					// errFound := scope.Raw(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v (%v %v,%v %v,%v %v,%v %v);", quotedMigrationTableName, "id", "INT", "field", "VARCHAR(150)", "action", "VARCHAR(10)", "status", "VARCHAR(10)")).Exec().HasError()
-					errFound := scope.Raw(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v;", quotedMigrationTableName)).Exec().HasError()
-					log.Println("found error in creating migration table", errFound)
+					// NOTE temporarily hard coding values, need to define struct for the same, also add error handling
+					scope.Raw(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v (%v %v,%v %v,%v %v,%v %v);", quotedMigrationTableName, "id", "INT", "field", "VARCHAR(150)", "source", "VARCHAR(10)", "status", "VARCHAR(10)")).Exec()
 				}
-				fmt.Println(source)
-				// check if field has flag source
 				// check if migration for field has been initiated
 				// if not then notify and start migration
 			}
