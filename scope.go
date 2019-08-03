@@ -1362,15 +1362,35 @@ func (scope *Scope) autoMigrate() *Scope {
 						}
 						// INITIATE THE MIGRATION PROCESS and INSERT RECORD
 
+						var maxId []int
+						maxIdError := scope.db.Table(scope.TableName()).Order("-id").Limit(1).Pluck("id", &maxId).Error
+						if maxIdError != nil {
+							fmt.Println("ERROR WHILE RETRIEVING TOP ID")
+							panic(maxIdError)
+						}
+
+						//deprecate old table by adding suffix
+						quotedNewTableName := tableName + "_old"
+						quotedNewTableName = scope.Dialect().Quote(quotedNewTableName)
+						//fmt.Println(quotedNewTableName)
+						alterError := scope.Raw(fmt.Sprintf("ALTER TABLE %v RENAME %v;", quotedTableName, quotedNewTableName)).Exec().HasError()
+						fmt.Println("ALTER ERROR")
+						fmt.Println(alterError)
+						//create new table with last key + 1
+						scope.createTable()
+						scope.Raw(fmt.Sprintf("ALTER TABLE %v AUTO_INCREMENT = %v;", quotedNewTableName, maxId[0]+1)).Exec()
+						fmt.Println("chk")
+
 						sliceType := reflect.MakeSlice(reflect.SliceOf(modelStruct.ModelType), 0, 0)
 						outputValues := reflect.New(sliceType.Type())
 						outputValues.Elem().Set(sliceType)
 
 						var outputSlices []Models.Customer
 
-						retrievalError := scope.db.Table(tableName).Find(&outputSlices).Error
+						oldTableName := scope.TableName() + "_old"
+						retrievalError := scope.db.Table(oldTableName).Find(&outputSlices).Error
 						if retrievalError != nil {
-							fmt.Print(retrievalError)
+							fmt.Println(retrievalError)
 							panic("ERROR WHILE FETCHING ALL ENTRIES FROM CURRENT TABLE")
 						}
 						for _, val := range outputSlices {
@@ -1385,7 +1405,7 @@ func (scope *Scope) autoMigrate() *Scope {
 							} else if newValue[0].Kind() == reflect.Int {
 								fieldToUpdate.SetInt(newValue[0].Int())
 							}
-							scope.db.Table(tableName).Save(val)
+							scope.db.Table(scope.TableName()).Save(val)
 						}
 						var currentMigration Migration
 						currentMigrationError := scope.db.Model(Migration{}).Where(Migration{
@@ -1400,6 +1420,10 @@ func (scope *Scope) autoMigrate() *Scope {
 							panic(currentMigrationError)
 						}
 						scope.db.Model(Migration{}).Save(currentMigration)
+						dropError := scope.Raw(fmt.Sprintf("DROP TABLE %v;", oldTableName)).Exec().HasError()
+						if dropError  {
+							panic("ERROR WHILE DROPPING OLD TABLE")
+						}
 					}
 				} else {
 					fmt.Println(migrationError.Error())
