@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jinzhu/gorm"
+	"github.com/raghuvanshy/gorm/Models"
 	"reflect"
 	"regexp"
 	"strings"
@@ -1323,7 +1324,8 @@ func (scope *Scope) autoMigrate() *Scope {
 	if !scope.Dialect().HasTable(tableName) {
 		scope.createTable()
 	} else {
-		for _, field := range scope.GetModelStruct().StructFields {
+		modelStruct := scope.GetModelStruct()
+		for _, field := range modelStruct.StructFields {
 			if !scope.Dialect().HasColumn(tableName, field.DBName) {
 				if field.IsNormal {
 					sqlTag := scope.Dialect().DataTypeOf(field)
@@ -1351,7 +1353,7 @@ func (scope *Scope) autoMigrate() *Scope {
 							TableName:tableName,
 							FieldName:field.Name,
 							SourceFieldName:field.MigrationSource,
-							Status: "NOT_STARTED",
+							Status: "IN PROGRESS",
 						}
 						creationError := scope.db.Create(&newMigration).Error
 						if creationError != nil {
@@ -1359,13 +1361,37 @@ func (scope *Scope) autoMigrate() *Scope {
 							panic("ERROR WHILE CREATING ENTRY IN MIGRATION TABLE")
 						}
 						// INITIATE THE MIGRATION PROCESS and INSERT RECORD
+
+						sliceType := reflect.MakeSlice(reflect.SliceOf(modelStruct.ModelType), 0, 0)
+						outputValues := reflect.New(sliceType.Type())
+						outputValues.Elem().Set(sliceType)
+
+						var outputSlices []Models.Customer
+
+						retrievalError := scope.db.Table(tableName).Find(&outputSlices).Error
+						if retrievalError != nil {
+							fmt.Print(retrievalError)
+							panic("ERROR WHILE FETCHING ALL ENTRIES FROM CURRENT TABLE")
+						}
+						for _, val := range outputSlices {
+							fmt.Println("FIELD")
+							fmt.Println(val)
+							newValue := field.MigrationFunc.Call([]reflect.Value{reflect.ValueOf(val).FieldByName(field.MigrationSource)})
+							fmt.Println(val)
+							fmt.Println(newValue)
+							fieldToUpdate := reflect.ValueOf(&val).Elem().FieldByName(field.Name)
+							if newValue[0].Kind() == reflect.String {
+								fieldToUpdate.SetString(newValue[0].String())
+							} else if newValue[1].Kind() == reflect.Int {
+								fieldToUpdate.SetInt(newValue[0].Int())
+							}
+							scope.db.Table(tableName).Save(val)
+						}
 					}
 				} else {
 					fmt.Println(migrationError.Error())
 					panic(errors.New("Unexpected Error"))
 				}
-				// check if migration for field has been initiated
-				// if not then notify and start migration
 			}
 
 			scope.createJoinTable(field)

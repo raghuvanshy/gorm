@@ -131,7 +131,7 @@ func TestExceptionsWithInvalidSql(t *testing.T) {
 		t.Errorf("Should got error with invalid SQL")
 	}
 
-	if DB.Where("sdsd.zaaa = ?", "sd;;;aa").Find(&User{}).Error == nil {
+	if DB.Where("sdsd.zaaa = ?", "sd;;;maa").Find(&User{}).Error == nil {
 		t.Errorf("Should got error with invalid SQL")
 	}
 
