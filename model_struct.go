@@ -67,6 +67,9 @@ type StructField struct {
 	Struct          reflect.StructField
 	IsForeignKey    bool
 	Relationship    *Relationship
+	MigrationSource string
+	MigrationColumn *StructField
+	MigrationFunc   reflect.Value
 
 	tagSettingsLock sync.RWMutex
 }
@@ -183,6 +186,9 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 
 	modelStruct.ModelType = reflectType
 
+	toBeResolvedSource := map[string]*StructField{}
+	allFields := map[string]*StructField{}
+
 	// Get all fields
 	for i := 0; i < reflectType.NumField(); i++ {
 		if fieldStruct := reflectType.Field(i); ast.IsExported(fieldStruct.Name) {
@@ -193,6 +199,7 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 				Tag:         fieldStruct.Tag,
 				TagSettings: parseTagSetting(fieldStruct.Tag),
 			}
+			allFields[field.Name] = field
 
 			// is ignored field
 			if _, ok := field.TagSettingsGet("-"); ok {
@@ -209,6 +216,14 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 
 				if _, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok && !field.IsPrimaryKey {
 					field.HasDefaultValue = true
+				}
+
+				if migrationSource, ok := field.TagSettingsGet("SOURCE"); ok {
+					field.MigrationSource = migrationSource
+					toBeResolvedSource[field.Name] = nil
+					if converterFunc, ok := field.TagSettingsGet("CONVERTER"); ok {
+						field.MigrationFunc = reflect.New(modelStruct.ModelType).MethodByName(converterFunc)
+					}
 				}
 
 				indirectType := fieldStruct.Type
@@ -623,6 +638,16 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 		if field := getForeignField("id", modelStruct.StructFields); field != nil {
 			field.IsPrimaryKey = true
 			modelStruct.PrimaryFields = append(modelStruct.PrimaryFields, field)
+		}
+	}
+
+	for fieldName, _ := range toBeResolvedSource {
+		toBeResolvedSource[fieldName] = allFields[allFields[fieldName].MigrationSource]
+	}
+
+	for _, val := range modelStruct.StructFields {
+		if migrationSourceField, ok := toBeResolvedSource[val.Name]; ok {
+			val.MigrationColumn = migrationSourceField
 		}
 	}
 

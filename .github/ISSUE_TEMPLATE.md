@@ -14,7 +14,7 @@ Need to runnable with [GORM's docker compose config](https://github.com/jinzhu/g
 package main
 
 import (
-	"github.com/jinzhu/gorm"
+	"github.com/raghuvanshy/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mssql"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	_ "github.com/jinzhu/gorm/dialects/postgres"

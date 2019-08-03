@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"github.com/jinzhu/gorm"
 	"reflect"
 	"regexp"
 	"strings"
@@ -24,6 +25,14 @@ type Scope struct {
 	skipLeft        bool
 	fields          *[]*Field
 	selectAttrs     *[]string
+}
+
+type Migration struct {
+	ID              int
+	TableName       string
+	FieldName       string
+	SourceFieldName string
+	Status			string
 }
 
 // IndirectValue return scope's reflect value's indirect value
@@ -1295,11 +1304,21 @@ func (scope *Scope) removeIndex(indexName string) {
 	scope.Dialect().RemoveIndex(scope.TableName(), indexName)
 }
 
+func (scope *Scope) migrationStatus(tableName string, fieldName string, sourceFieldName string,) (string, error) {
+	var migrationStatus Migration
+	migrationError := scope.db.Model(Migration{}).Where(Migration{TableName:tableName, FieldName:fieldName, SourceFieldName:sourceFieldName}).First(&migrationStatus).Error
+	if migrationError == nil {
+		return migrationStatus.Status, nil
+	}
+	if migrationError.Error() == gorm.ErrRecordNotFound.Error() {
+		return "NOT_STARTED", nil
+	}
+	return "", migrationError
+}
+
 func (scope *Scope) autoMigrate() *Scope {
 	tableName := scope.TableName()
 	quotedTableName := scope.QuotedTableName()
-	migrationTableName := scope.MigrationTableName()
-	quotedMigrationTableName := scope.QuotedMigrationTableName()
 
 	if !scope.Dialect().HasTable(tableName) {
 		scope.createTable()
@@ -1313,11 +1332,37 @@ func (scope *Scope) autoMigrate() *Scope {
 			}
 			// check if field has flag source
 			// if source, ok := field.TagSettingsGet("SOURCE"); ok {
-			if _, ok := field.TagSettingsGet("SOURCE"); ok {
+			if field.MigrationColumn != nil {
 				// check if migration table has been created
-				if !scope.Dialect().HasTable(migrationTableName) {
-					// NOTE temporarily hard coding values, need to define struct for the same, also add error handling
-					scope.Raw(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %v (%v %v,%v %v,%v %v,%v %v);", quotedMigrationTableName, "id", "INT", "field", "VARCHAR(150)", "source", "VARCHAR(10)", "status", "VARCHAR(10)")).Exec()
+				if !scope.Dialect().HasTable("migrations") {
+					scope.db.CreateTable(&Migration{})
+				}
+
+				migrationStatus, migrationError := scope.migrationStatus(tableName, field.Name, field.MigrationSource)
+				if migrationError == nil {
+					switch migrationStatus{
+					case "COMPLETE":
+						// IGNORE SINCE MIGRATION IS COMPLETE
+					case "IN PROGRESS":
+						// Already in Progress. Do Nothing
+					default:
+						fmt.Println("NO RECORD FOUND. INITIATE MIGRATION")
+						newMigration := Migration{
+							TableName:tableName,
+							FieldName:field.Name,
+							SourceFieldName:field.MigrationSource,
+							Status: "NOT_STARTED",
+						}
+						creationError := scope.db.Create(&newMigration).Error
+						if creationError != nil {
+							fmt.Print(creationError)
+							panic("ERROR WHILE CREATING ENTRY IN MIGRATION TABLE")
+						}
+						// INITIATE THE MIGRATION PROCESS and INSERT RECORD
+					}
+				} else {
+					fmt.Println(migrationError.Error())
+					panic(errors.New("Unexpected Error"))
 				}
 				// check if migration for field has been initiated
 				// if not then notify and start migration

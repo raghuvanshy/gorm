@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/erikstmartin/go-testdb"
-	"github.com/jinzhu/gorm"
+	"github.com/raghuvanshy/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mssql"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"github.com/jinzhu/gorm/dialects/postgres"

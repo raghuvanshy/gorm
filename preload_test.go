@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jinzhu/gorm"
+	"github.com/raghuvanshy/gorm"
 )
 
 func getPreloadUser(name string) *User {
